@@ -1,7 +1,7 @@
 import telebot
 import sqlite3
 import re
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timedelta
 
 TOKEN = '8780973280:AAEbgwiKGCZacarCDzDjH2Wq4s4MAt_1IwU'
@@ -123,7 +123,6 @@ def show_report_menu(chat_id):
     )
     bot.send_message(chat_id, "📊 ဘယ်လို အစီရင်ခံစာမျိုး စစ်ဆေးချင်ပါသလဲ ခင်ဗျာ။", reply_markup=markup)
 
-# 📊 လချုပ်အတွက် Total သို့မဟုတ် Detail ရွေးခိုင်းသည့် UI
 def show_monthly_report_options(chat_id):
     user_states[chat_id]["state"] = "SELECTING_MONTHLY_REPORT_OPTION"
     markup = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -134,7 +133,6 @@ def show_monthly_report_options(chat_id):
     )
     bot.send_message(chat_id, "👉 လချုပ်ကို မည်သို့ စစ်ဆေးလိုပါသလဲ ခင်ဗျာ။", reply_markup=markup)
 
-# 🔎 Detail အတွက် Expense သို့မဟုတ် Credit သီးသန့်ရွေးခိုင်းသည့် UI
 def show_detail_type_options(chat_id):
     user_states[chat_id]["state"] = "SELECTING_DETAIL_TYPE"
     markup = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -287,7 +285,7 @@ def handle_navigation(message):
             conn.commit()
             conn.close()
             
-            bot.send_message(chat_id, f"✅ စာရင်းပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။ စျေးနှုန်းအသစ်ကို `{new_price:,.0f}` သို့ ပြောင်းလဲလိုက်ပါပြီ။")
+            bot.send_message(chat_id, f"✅ စာရင်းပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။ စျေးနှုန်းအသစ်ကို `{new_price:,.0f}` Thb သို့ ပြောင်းလဲလိုက်ပါပြီ။")
             show_main_menu(chat_id, staff_name)
         except:
             bot.send_message(chat_id, "❌ ဂဏန်းအမှန်အတိုင်း သေချာပြန်ရိုက်ပေးပါဗျာ။")
@@ -391,7 +389,31 @@ def handle_edit_command(message):
             
             bot.send_message(chat_id, f"✍️ စာရင်း ID {record_id} အတွက် **စျေးနှုန်းအသစ်** ကို ရိုက်ထည့်ပေးပါဗျာ။")
         except:
-            bot.send_message(chat_id, "❌ မှားယွင်းနေပါသည်။")
+            bot.send_message(chat_id, "❌ ✍️ ပြင်ဆင်ခြင်း မအောင်မြင်ပါ။")
+
+# 🔗 ❌ ဖျက်မည် (Inline Button) ကို ကိုင်တွယ်ဖြေရှင်းသည့် စနစ်သစ်
+@bot.callback_query_handler(func=lambda call: call.data.startswith("quick_del_"))
+def handle_quick_delete(call):
+    try:
+        # ၁။ Telegram Server ကို ခလုတ်နှိပ်တာ လက်ခံရရှိကြောင်း အကြောင်းပြန်ခြင်း (Loading ရပ်သွားစေရန်)
+        bot.answer_callback_query(call.id, "စာရင်းကို ပြန်လည်ဖျက်သိမ်းနေပါသည်...")
+        
+        # ၂။ ကလစ်နှိပ်လိုက်သည့် ခလုတ်ဆီကနေ သက်ဆိုင်ရာ Record ID ကို လှမ်းယူခြင်း
+        record_id = int(call.data.split("_")[2])
+        
+        # ၃။ Database ထဲသို့ သွားရောက်ဖျက်ဆီးခြင်း
+        conn = sqlite3.connect('notoxic_expenses.db')
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM store_expenses WHERE id = ?", (record_id,))
+        conn.commit()
+        conn.close()
+        
+        # ၄။ ဝန်ထမ်းမျက်စိရှေ့တင် မက်ဆေ့ခ်ျကြီးကိုပါ ဝုန်းခနဲ ဖျက်ဆီးပစ်လိုက်ခြင်း
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        
+    except Exception as e:
+        print(f"Error in quick delete: {e}")
+        bot.answer_callback_query(call.id, "❌ ဖျက်ရန် အဆင်မပြေပါ။")
 
 def save_expenses_to_db(message):
     chat_id = message.chat.id
@@ -406,6 +428,8 @@ def save_expenses_to_db(message):
     lines = raw_text.strip().split('\n')
     summary_lines = []
     total_cost = 0
+    last_inserted_id = None
+    inserted_count = 0
     
     for line in lines:
         if "=" in line:
@@ -427,6 +451,8 @@ def save_expenses_to_db(message):
                 
                 total_cost += price
                 cursor.execute("INSERT INTO store_expenses (date, staff_name, category, item_name, price) VALUES (?, ?, ?, ?, ?)", (date, staff, category, item_name, price))
+                last_inserted_id = cursor.lastrowid # အသစ်ဝင်သွားတဲ့ ID ကို လှမ်းမှတ်ခြင်း
+                inserted_count += 1
                 summary_lines.append(f"• {item_name} = {price:,.0f}")
             except Exception:
                 continue
@@ -434,11 +460,21 @@ def save_expenses_to_db(message):
     conn.commit()
     conn.close()
     
+    if inserted_count == 0:
+        bot.send_message(chat_id, "❌ ပုံစံမမှန်ကန်သဖြင့် စာရင်းသွင်း၍မရပါဗျာ။ `ပစ္စည်း=စျေးနှုန်း` အတိုင်း ပြန်သွင်းပါ။")
+        return
+
     reply_msg = f"No Toxic Account 🤖\n✅ {date} အတွက် [{category}] စာရင်းကို Database ထဲ သိမ်းဆည်းပြီးပါပြီ။\n\n📊 **ယနေ့ စာရင်းအနှစ်ချုပ်:**\n"
     reply_msg += "\n".join(summary_lines)
     reply_msg += f"\n\n💰 **စုစုပေါင်း = {total_cost:,.0f}**"
     
-    bot.send_message(chat_id, reply_msg)
+    # 🛠️ တစ်ကြောင်းတည်း သွင်းတာမျိုးဆိုရင် အမှားပါရင် ချက်ချင်းပြန်ဖျက်နိုင်အောင် Inline Button တွဲပေးလိုက်ခြင်း
+    inline_markup = None
+    if inserted_count == 1 and last_inserted_id is not None:
+        inline_markup = InlineKeyboardMarkup()
+        inline_markup.add(InlineKeyboardButton("❌ ဖျက်မည် (Undo)", callback_markup_data=f"quick_del_{last_inserted_id}"))
+    
+    bot.send_message(chat_id, reply_msg, reply_markup=inline_markup)
     show_main_menu(chat_id, staff)
 
 def view_daily_report(chat_id, target_date):
@@ -502,7 +538,6 @@ def view_weekly_report(chat_id):
     bot.send_message(chat_id, report_msg)
     show_main_menu(chat_id, staff_name)
 
-# 📊 (Total) ခလုတ်အတွက်- အကျဉ်းချုပ်ပြသပေးမည့်စနစ်
 def view_monthly_total_report(chat_id):
     staff_name = user_states[chat_id]["staff_name"]
     current_month_year = datetime.now().strftime("/%m/%Y")
@@ -553,7 +588,6 @@ def view_monthly_total_report(chat_id):
     bot.send_message(chat_id, report_msg)
     show_main_menu(chat_id, staff_name)
 
-# 📝 (Detail) ခလုတ်အတွက်- ရက်သတ္တပတ်အလိုက် မက်ဆေ့ခ်ျခွဲထုတ်ပြသမည့်စနစ်
 def view_monthly_detailed_report(chat_id, detail_type):
     staff_name = user_states[chat_id]["staff_name"]
     current_month_year = datetime.now().strftime("/%m/%Y")
@@ -568,7 +602,6 @@ def view_monthly_detailed_report(chat_id, detail_type):
         bot.send_message(chat_id, "📋 ယခုလအတွက် အသေးစိတ်ပြစရာ စာရင်းမရှိပါဘူးဗျာ။")
         return
 
-    # ရက်သတ္တပတ် ၄ ခုအတွက် သီးသန့် Array များ ခွဲခြားတည်ဆောက်ခြင်း
     weeks = {
         "Week 1 (01 to 07)": [],
         "Week 2 (08 to 14)": [],
@@ -589,18 +622,15 @@ def view_monthly_detailed_report(chat_id, detail_type):
             else:
                 w_key = "Week 4+ (22 to End)"
                 
-            # အမျိုးအစားအလိုက် စစ်ထုတ်ခြင်း
             if detail_type == "EXPENSE" and cat in EXPENSE_CATEGORIES:
                 weeks[w_key].append(f"• {date_str} - [{cat}] {item} = {price:,.0f} (by {entry_staff})")
             elif detail_type == "CREDIT" and cat == "🍽️ Staff Credit":
-                # လုံခြုံရေးအရ ဝန်ထမ်းဆိုလျှင် တခြားသူစာရင်းကို လုံးဝမပြရန်
                 if staff_name != "Admin (Owner)" and f"({staff_name})" not in item:
                     continue
                 weeks[w_key].append(f"• {date_str} - {item} = {price:,.0f} (by {entry_staff})")
         except:
             continue
 
-    # 📩 အပတ်စဉ်အလိုက် မက်ဆေ့ခ်ျ သီးသန့်စီ ခွဲပို့ခြင်း
     bot.send_message(chat_id, f"🤖 **No Toxic Account - [{'ဆိုင်သုံး Expense' if detail_type == 'EXPENSE' else 'Staff Credit'}] အသေးစိတ်စာရင်းချုပ်**")
     
     has_data = False
@@ -608,12 +638,12 @@ def view_monthly_detailed_report(chat_id, detail_type):
         if items:
             has_data = True
             msg = f"📅 **{week_title}**\n\n" + "\n".join(items)
-            bot.send_message(chat_id, msg) # 👈 တစ်ပတ်စာပြည့်တိုင်း Message တစ်စောင်စီ သီးသန့်ခွဲပို့သည်
+            bot.send_message(chat_id, msg)
 
     if not has_data:
         bot.send_message(chat_id, "📋 ၎င်းကဏ္ဍတွင် ယခုလအတွက် မည်သည့် အသေးစိတ်စာရင်းမှ မရှိသေးပါခင်ဗျာ။")
         
     show_main_menu(chat_id, staff_name)
 
-print("Weekly Detailed & Separated system is successfully active.")
+print("System updated with Callback Query Handler for Quick Delete Button.")
 bot.polling()
