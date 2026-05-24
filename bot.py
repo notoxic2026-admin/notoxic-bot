@@ -391,24 +391,20 @@ def handle_edit_command(message):
         except:
             bot.send_message(chat_id, "❌ ✍️ ပြင်ဆင်ခြင်း မအောင်မြင်ပါ။")
 
-# 🔗 ❌ ဖျက်မည် (Inline Button) ကို ကိုင်တွယ်ဖြေရှင်းသည့် စနစ်သစ်
+# 🔗 ❌ ဖျက်မည် (Inline Button) ကို ကိုင်တွယ်ဖြေရှင်းသည့် စနစ်သစ် (စာလုံးလုံးဝပြင်ပြီးသား)
 @bot.callback_query_handler(func=lambda call: call.data.startswith("quick_del_"))
 def handle_quick_delete(call):
     try:
-        # ၁။ Telegram Server ကို ခလုတ်နှိပ်တာ လက်ခံရရှိကြောင်း အကြောင်းပြန်ခြင်း (Loading ရပ်သွားစေရန်)
         bot.answer_callback_query(call.id, "စာရင်းကို ပြန်လည်ဖျက်သိမ်းနေပါသည်...")
         
-        # ၂။ ကလစ်နှိပ်လိုက်သည့် ခလုတ်ဆီကနေ သက်ဆိုင်ရာ Record ID ကို လှမ်းယူခြင်း
         record_id = int(call.data.split("_")[2])
         
-        # ၃။ Database ထဲသို့ သွားရောက်ဖျက်ဆီးခြင်း
         conn = sqlite3.connect('notoxic_expenses.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM store_expenses WHERE id = ?", (record_id,))
         conn.commit()
         conn.close()
         
-        # ၄။ ဝန်ထမ်းမျက်စိရှေ့တင် မက်ဆေ့ခ်ျကြီးကိုပါ ဝုန်းခနဲ ဖျက်ဆီးပစ်လိုက်ခြင်း
         bot.delete_message(call.message.chat.id, call.message.message_id)
         
     except Exception as e:
@@ -451,7 +447,7 @@ def save_expenses_to_db(message):
                 
                 total_cost += price
                 cursor.execute("INSERT INTO store_expenses (date, staff_name, category, item_name, price) VALUES (?, ?, ?, ?, ?)", (date, staff, category, item_name, price))
-                last_inserted_id = cursor.lastrowid # အသစ်ဝင်သွားတဲ့ ID ကို လှမ်းမှတ်ခြင်း
+                last_inserted_id = cursor.lastrowid
                 inserted_count += 1
                 summary_lines.append(f"• {item_name} = {price:,.0f}")
             except Exception:
@@ -468,11 +464,11 @@ def save_expenses_to_db(message):
     reply_msg += "\n".join(summary_lines)
     reply_msg += f"\n\n💰 **စုစုပေါင်း = {total_cost:,.0f}**"
     
-    # 🛠️ တစ်ကြောင်းတည်း သွင်းတာမျိုးဆိုရင် အမှားပါရင် ချက်ချင်းပြန်ဖျက်နိုင်အောင် Inline Button တွဲပေးလိုက်ခြင်း
+    # 🛠️ ဤနေရာတွင် callback_data ကို အမှန်ကန်ဆုံး ပြင်ဆင်ပေးထားပါသည်
     inline_markup = None
     if inserted_count == 1 and last_inserted_id is not None:
         inline_markup = InlineKeyboardMarkup()
-        inline_markup.add(InlineKeyboardButton("❌ ဖျက်မည် (Undo)", callback_markup_data=f"quick_del_{last_inserted_id}"))
+        inline_markup.add(InlineKeyboardButton("❌ ဖျက်မည် (Undo)", callback_data=f"quick_del_{last_inserted_id}"))
     
     bot.send_message(chat_id, reply_msg, reply_markup=inline_markup)
     show_main_menu(chat_id, staff)
@@ -645,5 +641,5 @@ def view_monthly_detailed_report(chat_id, detail_type):
         
     show_main_menu(chat_id, staff_name)
 
-print("System updated with Callback Query Handler for Quick Delete Button.")
+print("System successfully active with correct callback_data.")
 bot.polling()
