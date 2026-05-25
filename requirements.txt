@@ -1,4 +1,2 @@
 pyTelegramBotAPI
-telebot
-psycopg2-binary
 psycopg2-binary
