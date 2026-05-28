@@ -37,6 +37,7 @@ def get_main_menu(staff_name):
     markup.add(KeyboardButton("💸 စာရင်းအသစ် သွင်းမည်"), KeyboardButton("📊 အစီရင်ခံစာ ကြည့်မည်"))
     if staff_name == "Admin (Owner)":
         markup.add(KeyboardButton("✏️ ပြင်မည် / ဖျက်မည် (Admin သီးသန့်)"))
+    markup.add(KeyboardButton("🔄 အကောင့်ပြောင်းမည်")) # ဒီခလုတ်အသစ် ထပ်တိုးထားပါသည်
     return markup
 
 # အပိုင်းခွဲပို့သော Function (Telegram 4000 limit အတွက်)
@@ -117,6 +118,12 @@ def handle_main_menu(message):
             ask_for_date(chat_id)
         else:
             show_main_menu(chat_id)
+    elif text == "🔄 အကောင့်ပြောင်းမည်":
+        # အကောင့်ဟောင်းကို ဖျက်ပြီး Password ပြန်တောင်းမည်
+        user_states[chat_id] = {} 
+        markup = telebot.types.ReplyKeyboardRemove() # ရှိနေတဲ့ ခလုတ်တွေကို ခဏဖျောက်မည်
+        msg = bot.send_message(chat_id, "👋 အကောင့်မှ ထွက်လိုက်ပါပြီ။\nကျေးဇူးပြု၍ ဝင်ရောက်လိုသော လျှို့ဝှက်နံပါတ် (Password) အသစ်ကို ရိုက်ထည့်ပါ။", reply_markup=markup)
+        bot.register_next_step_handler(msg, check_password)
     else:
         show_main_menu(chat_id)
 
