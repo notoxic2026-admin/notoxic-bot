@@ -37,7 +37,7 @@ def get_main_menu(staff_name):
     markup.add(KeyboardButton("💸 စာရင်းအသစ် သွင်းမည်"), KeyboardButton("📊 အစီရင်ခံစာ ကြည့်မည်"))
     if staff_name == "Admin (Owner)":
         markup.add(KeyboardButton("✏️ ပြင်မည် / ဖျက်မည် (Admin သီးသန့်)"))
-    markup.add(KeyboardButton("🔄 အကောင့်ပြောင်းမည်")) # ဒီခလုတ်အသစ် ထပ်တိုးထားပါသည်
+    markup.add(KeyboardButton("🔄 အကောင့်ပြောင်းမည်"))
     return markup
 
 # အပိုင်းခွဲပို့သော Function (Telegram 4000 limit အတွက်)
@@ -119,16 +119,15 @@ def handle_main_menu(message):
         else:
             show_main_menu(chat_id)
     elif text == "🔄 အကောင့်ပြောင်းမည်":
-        # အကောင့်ဟောင်းကို ဖျက်ပြီး Password ပြန်တောင်းမည်
         user_states[chat_id] = {} 
-        markup = telebot.types.ReplyKeyboardRemove() # ရှိနေတဲ့ ခလုတ်တွေကို ခဏဖျောက်မည်
+        markup = telebot.types.ReplyKeyboardRemove()
         msg = bot.send_message(chat_id, "👋 အကောင့်မှ ထွက်လိုက်ပါပြီ။\nကျေးဇူးပြု၍ ဝင်ရောက်လိုသော လျှို့ဝှက်နံပါတ် (Password) အသစ်ကို ရိုက်ထည့်ပါ။", reply_markup=markup)
         bot.register_next_step_handler(msg, check_password)
     else:
         show_main_menu(chat_id)
 
 # ==========================================
-# 2. Date Selection (For Add & Admin Edit)
+# 2. Date Selection
 # ==========================================
 def ask_for_date(chat_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -185,7 +184,7 @@ def process_custom_date(message):
         bot.register_next_step_handler(msg, process_custom_date)
 
 # ==========================================
-# 3. Add Expense & Draft System
+# 3. Add Expense & Draft System (With Advanced Format)
 # ==========================================
 def show_category_menu(chat_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -206,7 +205,15 @@ def start_drafting(message):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("✅ အားလုံးသိမ်းမည် (Save)"))
     markup.add(KeyboardButton("❌ ပယ်ဖျက်မည်"))
-    msg = bot.send_message(chat_id, "📝 စာရင်းများကို တစ်ခုချင်းစီ (သို့) အများကြီး ရိုက်ထည့်နိုင်ပါပြီ။\nပုံစံ: ပစ္စည်း=စျေးနှုန်း\n💡 ပြီးပါက [✅ အားလုံးသိမ်းမည် (Save)] ကို နှိပ်ပါ။", reply_markup=markup)
+    
+    guide_msg = (
+        "📝 စာရင်းများကို တစ်ခုချင်းစီ (သို့) အများကြီး ရိုက်ထည့်နိုင်ပါပြီ။\n\n"
+        "💡 **ပုံစံ (၁):** ပစ္စည်း * အရေအတွက် = စုစုပေါင်းစျေး (ဥပမာ - `Egg*2=100`)\n"
+        "💡 **ပုံစံ (၂):** ပစ္စည်း x အရေအတွက် = စုစုပေါင်းစျေး (ဥပမာ - `Beer x 3 = 300`)\n"
+        "💡 **ပုံစံ (၃):** ရိုးရိုးပစ္စည်း = စျေးနှုန်း (ဥပမာ - `Ice=50` ဟုရိုက်ပါက အရေအတွက်ကို 1 ဟု ယူဆပါမည်)\n\n"
+        "💡 *ပြီးပါက အောက်ရှိ **[✅ အားလုံးသိမ်းမည် (Save)]** ကို နှိပ်ပါ။*"
+    )
+    msg = bot.send_message(chat_id, guide_msg, reply_markup=markup, parse_mode='Markdown')
     bot.register_next_step_handler(msg, handle_draft_input)
 
 def handle_draft_input(message):
@@ -231,13 +238,27 @@ def handle_draft_input(message):
     for line in lines:
         if '=' in line:
             parts = line.split('=')
-            item_name = parts[0].strip()
+            left_side = parts[0].strip()
             try:
                 price = float(parts[1].strip())
+                
+                # အမြှောက်စနစ် (*) သို့မဟုတ် (x) ပါမပါ စစ်ဆေးခြင်း
+                if '*' in left_side:
+                    sub_parts = left_side.split('*')
+                    item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+                elif 'x' in left_side:
+                    sub_parts = left_side.split('x')
+                    item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+                elif 'X' in left_side:
+                    sub_parts = left_side.split('X')
+                    item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+                else:
+                    item_name = f"{left_side} (1 ခု)" # မပါရင် 1 ဟုအလိုအလျောက်ယူဆ
+                    
                 user_states[chat_id]["draft_items"].append({"name": item_name, "price": price})
                 added_count += 1
                 reply_text += f"• {item_name} = {price:g} Ks\n"
-            except ValueError:
+            except (ValueError, IndexError):
                 pass
                 
     if added_count > 0:
@@ -246,9 +267,9 @@ def handle_draft_input(message):
         markup.add(KeyboardButton("✅ အားလုံးသိမ်းမည် (Save)"))
         markup.add(KeyboardButton("✏️ မသိမ်းခင် ပြန်ပြင်မည် / ဖျက်မည်"))
         markup.add(KeyboardButton("❌ ပယ်ဖျက်မည်"))
-        bot.send_message(chat_id, f"➕ မှတ်သားထားပါသည်:\n{reply_text}\n*(လက်ရှိ ယာယီစာရင်း: {total_drafts} ခု)*", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(chat_id, f"➕ **မှတ်သားထားပါသည်:**\n{reply_text}\n*(လက်ရှိ ယာယီစာရင်း: {total_drafts} ခု)*", reply_markup=markup, parse_mode='Markdown')
     else:
-        bot.send_message(chat_id, "❌ ပုံစံမှားနေပါသည်။ (ဥပမာ - ကြက်ဥ=3000) ဟု ရိုက်ထည့်ပါ။")
+        bot.send_message(chat_id, "❌ ပုံစံမှားနေပါသည်။ (ဥပမာ - Egg*2=100 သို့မဟုတ် Ice=50) ဟု ရိုက်ထည့်ပါ။")
     bot.register_next_step_handler(message, handle_draft_input)
 
 def show_draft_edit_menu(chat_id):
@@ -305,7 +326,7 @@ def execute_draft_action(message):
     elif action == "✏️ အသစ်ပြန်ပြင်ရေးမည်":
         markup = ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(KeyboardButton("❌ နောက်ဆုတ်မည်"))
-        msg = bot.send_message(chat_id, "📝 စာရင်းအသစ်ကို ပုံစံအတိုင်း ပြန်လည်ရိုက်ထည့်ပါ။", reply_markup=markup)
+        msg = bot.send_message(chat_id, "📝 စာရင်းအသစ်ကို ပုံစံအတိုင်း ပြန်လည်ရိုက်ထည့်ပါ။\n(ဥပမာ - Egg*2=100 သို့မဟုတ် Ice=50)", reply_markup=markup)
         bot.register_next_step_handler(msg, save_edited_draft)
 
 def save_edited_draft(message):
@@ -316,14 +337,26 @@ def save_edited_draft(message):
     text = convert_burmese_to_english_digits(message.text)
     if '=' in text:
         parts = text.split('=')
+        left_side = parts[0].strip()
         try:
-            name = parts[0].strip()
             price = float(parts[1].strip())
+            if '*' in left_side:
+                sub_parts = left_side.split('*')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            elif 'x' in left_side:
+                sub_parts = left_side.split('x')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            elif 'X' in left_side:
+                sub_parts = left_side.split('X')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            else:
+                item_name = f"{left_side} (1 ခု)"
+                
             idx = user_states[chat_id]["edit_draft_idx"]
-            user_states[chat_id]["draft_items"][idx] = {"name": name, "price": price}
+            user_states[chat_id]["draft_items"][idx] = {"name": item_name, "price": price}
             bot.send_message(chat_id, "✅ အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
             show_draft_edit_menu(chat_id)
-        except ValueError:
+        except (ValueError, IndexError):
             msg = bot.send_message(chat_id, "❌ စျေးနှုန်းမှားနေပါသည်။ ပြန်ရိုက်ပါ။")
             bot.register_next_step_handler(msg, save_edited_draft)
     else:
@@ -359,7 +392,7 @@ def save_draft_to_db(chat_id):
     show_main_menu(chat_id)
 
 # ==========================================
-# 4. Advanced Report System
+# 4. Advanced Report System (Total & Detail)
 # ==========================================
 def ask_report_period(chat_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -486,7 +519,7 @@ def generate_report(message):
                     report += f"\n**{category}**\n"
                     current_category = category
                 
-                report += f"• {display_d}: {item} = {price:g} ({staff})\n"
+                report += f"• {display_d}: {item} = {price:g} Ks ({staff})\n"
                 total += price
                 
             report += f"━━━━━━━━━━━━━━━━━━━\n💰 **စုစုပေါင်း = {total:g} Ks**"
@@ -568,7 +601,7 @@ def execute_admin_db_action(message):
     elif action == "✏️ အသစ်ပြင်ရေးမည်":
         markup = ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(KeyboardButton("❌ ပယ်ဖျက်မည်"))
-        msg = bot.send_message(chat_id, "📝 စာရင်းအသစ်ကို ပုံစံအတိုင်း ပြန်လည်ရိုက်ထည့်ပါ။", reply_markup=markup)
+        msg = bot.send_message(chat_id, "📝 စာရင်းအသစ်ကို ပုံစံအတိုင်း ပြန်လည်ရိုက်ထည့်ပါ။\n(ဥပမာ - Egg*2=100 သို့မဟုတ် Ice=50)", reply_markup=markup)
         bot.register_next_step_handler(msg, save_edited_db_item)
 
 def save_edited_db_item(message):
@@ -579,18 +612,30 @@ def save_edited_db_item(message):
     text = convert_burmese_to_english_digits(message.text)
     if '=' in text:
         parts = text.split('=')
+        left_side = parts[0].strip()
         try:
-            name = parts[0].strip()
             price = float(parts[1].strip())
+            if '*' in left_side:
+                sub_parts = left_side.split('*')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            elif 'x' in left_side:
+                sub_parts = left_side.split('x')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            elif 'X' in left_side:
+                sub_parts = left_side.split('X')
+                item_name = f"{sub_parts[0].strip()} ({sub_parts[1].strip()} ခု)"
+            else:
+                item_name = f"{left_side} (1 ခု)"
+                
             db_id = user_states[chat_id]["edit_db_id"]
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("UPDATE store_expenses SET item_name = %s, price = %s WHERE id = %s", (name, price, db_id))
+            cursor.execute("UPDATE store_expenses SET item_name = %s, price = %s WHERE id = %s", (item_name, price, db_id))
             conn.commit()
             conn.close()
             bot.send_message(chat_id, "✅ စာရင်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
             show_main_menu(chat_id)
-        except ValueError:
+        except (ValueError, IndexError):
             msg = bot.send_message(chat_id, "❌ စျေးနှုန်းမှားနေပါသည်။ ပြန်ရိုက်ပါ။")
             bot.register_next_step_handler(msg, save_edited_db_item)
     else:
